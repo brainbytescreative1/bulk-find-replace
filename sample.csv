@@ -1,0 +1,4 @@
+find,replace
+http://old-site.test,https://new-site.com
+Old Company Name,New Company Name
+"Text, with a comma","Quoted replacement"
