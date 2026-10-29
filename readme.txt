@@ -1,7 +1,7 @@
 === Bulk Find Replace ===
 Requires at least: 5.6
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.3.0
 License: GPL-2.0-or-later
 
 Upload a CSV of find/replace pairs and run them across your database, with a dry-run preview first.
@@ -13,7 +13,7 @@ Tools > Bulk Find Replace.
 1. Upload a CSV with two columns: find, replace. A "find,replace" header row is optional. Comma, semicolon and tab delimiters are detected. See sample.csv.
 2. Pick the tables (all site tables are selected by default) and options.
 3. Run a dry run. It lists, per table, how many rows and cells would change, with before/after examples. Nothing is written.
-4. Run the replacements for real. The button unlocks only after a dry run.
+4. Run the replacements for real. The button unlocks only after a dry run, and by default only goes through the tables where the dry run found changes. Untick the option under the buttons to scan every selected table again.
 
 Details:
 
@@ -28,3 +28,8 @@ Details:
 * Restricted to administrators (super admins on multisite).
 
 Always take a database backup before a live run.
+
+== Changelog ==
+
+= 1.3.0 =
+* The real run only processes the tables where the dry run found changes, with an option to scan all selected tables instead.
