@@ -22,6 +22,10 @@
 	var liveBtn = runner.querySelector( '[data-mode=live]' );
 	var progress = runner.querySelector( '.bfr-progress' );
 	var results = runner.querySelector( '.bfr-results' );
+	var scope = runner.querySelector( '.bfr-scope' );
+	var scopeBox = scope && scope.querySelector( 'input' );
+	// Tables where the last finished dry run found changes, or null.
+	var matched = null;
 
 	function el( tag, text, className ) {
 		var node = document.createElement( tag );
@@ -48,7 +52,7 @@
 		return tr;
 	}
 
-	function batch( mode, tableIndex, afterPk ) {
+	function batch( mode, tableIndex, afterPk, scanAll ) {
 		var body = new URLSearchParams();
 		body.set( 'action', 'bfr_batch' );
 		body.set( 'nonce', bfrData.nonce );
@@ -56,6 +60,7 @@
 		body.set( 'mode', mode );
 		body.set( 'table_index', tableIndex );
 		body.set( 'after_pk', afterPk === null ? '' : afterPk );
+		body.set( 'scope', scanAll ? 'all' : 'matched' );
 		return fetch( bfrData.ajaxUrl, {
 			method: 'POST',
 			credentials: 'same-origin',
@@ -147,18 +152,40 @@
 		return totals;
 	}
 
+	function showScope() {
+		var useful = matched && matched.length && matched.length < tables.length;
+		scope.hidden = ! useful;
+		if ( useful ) {
+			scopeBox.checked = true;
+			scope.querySelector( 'span' ).textContent = bfrData.i18n.scopeOnly
+				.replace( '%1$d', matched.length )
+				.replace( '%2$s', matched.join( ', ' ) )
+				.replace( '%3$d', tables.length );
+		}
+	}
+
 	function run( mode ) {
 		dryBtn.disabled = true;
 		liveBtn.disabled = true;
 		results.textContent = '';
 
-		var stats = tables.map( function ( name ) {
+		// The server picks the same list from its record of the dry run.
+		var scanAll = mode === 'dry' || ! matched || ( scope && ! scope.hidden && ! scopeBox.checked );
+		var list = scanAll ? tables : matched;
+		if ( mode === 'dry' ) {
+			matched = null;
+		}
+		if ( scope ) {
+			scope.hidden = true;
+		}
+
+		var stats = list.map( function ( name ) {
 			return { table: name, rows_changed: 0, cells: 0, replacements: 0, errors: 0, skipped_objs: 0, skipped: '', samples: [] };
 		} );
 
 		function step( index, afterPk ) {
-			progress.textContent = bfrData.i18n.running + ' ' + tables[ index ] + ' (' + ( index + 1 ) + '/' + tables.length + ')…';
-			return batch( mode, index, afterPk ).then( function ( r ) {
+			progress.textContent = bfrData.i18n.running + ' ' + list[ index ] + ' (' + ( index + 1 ) + '/' + list.length + ')…';
+			return batch( mode, index, afterPk, scanAll ).then( function ( r ) {
 				var s = stats[ index ];
 				s.rows_changed += r.rows_changed;
 				s.cells += r.cells;
@@ -168,6 +195,9 @@
 				s.skipped = r.skipped;
 				s.samples = s.samples.concat( r.samples ).slice( 0, 10 );
 				if ( r.all_done ) {
+					if ( r.matched_tables ) {
+						matched = r.matched_tables;
+					}
 					return;
 				}
 				return r.table_done ? step( index + 1, null ) : step( index, r.next_pk );
@@ -183,6 +213,9 @@
 					locked = true;
 				}
 				liveBtn.disabled = locked || totals.cells === 0;
+				if ( scope && mode === 'dry' && ! locked ) {
+					showScope();
+				}
 			} )
 			.catch( function ( err ) {
 				render( mode, stats );

@@ -66,6 +66,8 @@ class BFR_Admin {
 					'dryDone'      => __( 'Dry run finished. Nothing was changed.', 'bulk-find-replace' ),
 					'liveDone'     => __( 'Done. Your database has been updated.', 'bulk-find-replace' ),
 					'failed'       => __( 'Stopped because of an error:', 'bulk-find-replace' ),
+					/* translators: 1: number of tables, 2: table names, 3: number of selected tables. */
+					'scopeOnly'    => __( 'Only run on the %1$d tables where the dry run found changes (%2$s). Untick to scan all %3$d selected tables again.', 'bulk-find-replace' ),
 				),
 			)
 		);
@@ -222,7 +224,10 @@ class BFR_Admin {
 					?>
 				</p></div>
 			<?php else : ?>
-				<p class="description"><?php esc_html_e( 'The dry run shows what would change without writing anything. The real run unlocks after a dry run finishes.', 'bulk-find-replace' ); ?></p>
+				<p class="description"><?php esc_html_e( 'The dry run shows what would change without writing anything. The real run unlocks after a dry run finishes, and by default only goes through the tables where the dry run found changes.', 'bulk-find-replace' ); ?></p>
+				<p class="bfr-scope" hidden>
+					<label><input type="checkbox" checked> <span></span></label>
+				</p>
 			<?php endif; ?>
 			<p class="bfr-progress" aria-live="polite"></p>
 			<div class="bfr-results"></div>
@@ -400,8 +405,8 @@ class BFR_Admin {
 		$index    = isset( $_POST['table_index'] ) ? absint( $_POST['table_index'] ) : 0;
 		$after_pk = isset( $_POST['after_pk'] ) && '' !== $_POST['after_pk'] ? (string) wp_unslash( $_POST['after_pk'] ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- passed to $wpdb->prepare().
 
+		$starting = 0 === $index && null === $after_pk;
 		if ( $live ) {
-			$starting = 0 === $index && null === $after_pk;
 			if ( $starting && ! empty( $job['live_started'] ) ) {
 				wp_send_json_error( array( 'message' => __( 'This CSV has already been run. Upload it again to run it a second time.', 'bulk-find-replace' ) ) );
 			}
@@ -409,16 +414,27 @@ class BFR_Admin {
 				wp_send_json_error( array( 'message' => __( 'The live run was not started properly.', 'bulk-find-replace' ) ) );
 			}
 			if ( $starting ) {
+				// After a finished dry run, only visit the tables where it found changes, unless asked to scan them all.
+				$scan_all            = isset( $_POST['scope'] ) && 'all' === $_POST['scope'];
 				$job['live_started'] = time();
+				$job['live_tables']  = ! $scan_all && isset( $job['dry_matches'] ) ? $job['dry_matches'] : $job['tables'];
 				BFR_Job::save( $job );
 			}
+			$tables = isset( $job['live_tables'] ) ? $job['live_tables'] : $job['tables'];
+		} else {
+			if ( $starting ) {
+				$job['dry_found'] = array();
+				unset( $job['dry_matches'] );
+				BFR_Job::save( $job );
+			}
+			$tables = $job['tables'];
 		}
 
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 120 ); // phpcs:ignore
 		}
 
-		$result = BFR_Job::process_batch( $job, $index, $after_pk, $live );
+		$result = BFR_Job::process_batch( array_merge( $job, array( 'tables' => $tables ) ), $index, $after_pk, $live );
 		if ( $result['db_error'] ) {
 			wp_send_json_error(
 				array(
@@ -428,7 +444,21 @@ class BFR_Admin {
 			);
 		}
 
-		$result['all_done'] = $result['table_done'] && $index >= count( $job['tables'] ) - 1;
+		$result['all_done'] = $result['table_done'] && $index >= count( $tables ) - 1;
+
+		if ( ! $live ) {
+			$found = isset( $job['dry_found'] ) ? $job['dry_found'] : array();
+			if ( $result['rows_changed'] && ! in_array( $result['table'], $found, true ) ) {
+				$found[]          = $result['table'];
+				$job['dry_found'] = $found;
+				BFR_Job::save( $job );
+			}
+			if ( $result['all_done'] ) {
+				$job['dry_matches'] = array_values( array_intersect( $job['tables'], $found ) );
+				BFR_Job::save( $job );
+				$result['matched_tables'] = $job['dry_matches'];
+			}
+		}
 		if ( $live && $result['all_done'] ) {
 			$job['live_run'] = time();
 			BFR_Job::save( $job );

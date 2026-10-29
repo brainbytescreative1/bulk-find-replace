@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Bulk Find Replace
  * Description:       Upload a CSV of find/replace pairs and run them across the database, with a dry-run preview. Handles serialized data safely, like wp search-replace.
- * Version:           1.2.2
+ * Version:           1.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            BrainBytes Creative
@@ -14,7 +14,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'BFR_VERSION', '1.2.2' );
+define( 'BFR_VERSION', '1.3.0' );
 define( 'BFR_URL', plugin_dir_url( __FILE__ ) );
 
 require_once __DIR__ . '/includes/class-bfr-replacer.php';
