@@ -8,6 +8,8 @@
  * Author:            BrainBytes Creative
  * License:           GPL-2.0-or-later
  * Text Domain:       bulk-find-replace
+ * GitHub Plugin URI: brainbytescreative1/bulk-find-replace
+ * Primary Branch:    main
  *
  * @package Bulk_Find_Replace
  */
